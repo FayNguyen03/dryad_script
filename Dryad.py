@@ -7,6 +7,7 @@ from dotenv import load_dotenv
 from datetime import datetime, timedelta
 
 PARENT_DIRECTORY = "../c:/temp/dryad/"
+
 def get_dryad_token(CLIENT_ID: str, CLIENT_SECRET: str) -> str:
     """
     Sends a POST request with Dryad Client ID and Dryad Client Secret to get the token
