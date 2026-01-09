@@ -13,6 +13,7 @@ pip install requests dotenv
 ```
 CLIENT_ID={YOUR_DRYAD_CLIENT_ID}
 CLIENT_SECRET={YOUR_DRYAD_CLIENT_SECRET}
+PARENT_DIRECTORY={YOUR_LOCAL_DIRECTORY_TO_STORE_DOWLOAD_FILE_INCLUDING_SLASH}
 ```
 
 4. Create a directory `./c:/temp/dryad` to store the download files

@@ -1,14 +1,25 @@
 import os
 import sys
 import json
+import logging
 import requests
 import urllib.parse
 from dotenv import load_dotenv
 from datetime import datetime, timedelta
 
-PARENT_DIRECTORY = "../c:/temp/dryad/"
+PARENT_DIRECTORY = None
+CLIENT_ID = None
+CLIENT_SECRET = None
 
-def get_dryad_token(CLIENT_ID: str, CLIENT_SECRET: str) -> str:
+def initiate_logging():
+    logging.basicConfig(
+        filename='events.log',
+        level=logging.INFO,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        filemode='a'
+    )
+
+def get_dryad_token() -> str:
     """
     Sends a POST request with Dryad Client ID and Dryad Client Secret to get the token
 
@@ -19,8 +30,9 @@ def get_dryad_token(CLIENT_ID: str, CLIENT_SECRET: str) -> str:
     Returns:
         A Bearer token that is expired in 10 hours
     """
-    if not CLIENT_ID or not CLIENT_SECRET:
+    if not CLIENT_ID or CLIENT_ID == "" or not CLIENT_SECRET or CLIENT_SECRET == "":
         print("Error: CLIENT_ID and CLIENT_SECRET not found in .env file")
+        logging.error("CLIENT_ID and CLIENT_SECRET not found in .env file")
         return
     # If the token is cached
     cached_token = load_cached_token()
@@ -36,10 +48,13 @@ def get_dryad_token(CLIENT_ID: str, CLIENT_SECRET: str) -> str:
         data = response.json()
         token = data["access_token"]
         cache_token(token)
+        logging.info("Successfully get token")
         return token
     else:
         print(f"Request failed with status code: {response.status_code}")
         print(f"Response text: {response.text}")
+        logging.error(f"Request failed with status code: {response.status_code}")
+        logging.error(f"Response text: {response.text}")
         return None
 
 def cache_token(token: str, expired_hours: int = 10):
@@ -78,9 +93,11 @@ def load_cached_token() -> str | None:
         # If the cache has not been expired yet
         if datetime.now() < expiry_time:
             print("CACHE HIT")
+            logging.info("CACHE HIT")
             return cache_data["token"]
         else:
             print("CACHE MISS")
+            logging.info("CACHE MISS")
             os.remove(cache_file)
             return None
     except (json.JSONDecodeError, KeyError, ValueError):
@@ -111,13 +128,19 @@ def create_new_dir(doi_identifier: str) -> str | None:
     Returns:
         The full path to the created directory, or None if creation fails        
     """
+    if not PARENT_DIRECTORY or PARENT_DIRECTORY == "":
+        print("Error: PARENT_DIRECTORY not found")
+        logging.error("PARENT_DIRECTORY not found")
+        return None
     directory_path = f"{PARENT_DIRECTORY}{doi_identifier}"
     try:
         os.makedirs(directory_path, exist_ok=True)
         print(f"Directory created successfully at: {directory_path}")
+        logging.info(f"Directory created successfully at: {directory_path}")
         return directory_path
     except OSError as e:
         print(f"Error creating directory: {e}")
+        logging.error(f"Error creating directory: {e}")
         return None
 
 def get_dryad_dataset_version(doi_identifier: str, token: str) -> str | None:
@@ -150,6 +173,8 @@ def get_dryad_dataset_version(doi_identifier: str, token: str) -> str | None:
         if response is not None:
             print(f"Status code: {response.status_code}")
             print(f"Response content: {response.text}")
+            logging.error(f"Status code: {response.status_code}")
+            logging.error(f"Response content: {response.text}")
 
 def get_dryad_dataset(doi_identifier: str, token: str):
     """
@@ -171,13 +196,20 @@ def get_dryad_dataset(doi_identifier: str, token: str):
             data = response.json()
             file_list = data["_embedded"]["stash:files"]
             dataset_directory = create_new_dir(doi_identifier)
+            if not dataset_directory:
+                print(f"Directory does not exist")
+                logging.error(f"Directory does not exist")
+                return
             for file in file_list:
                 get_dryad_dataset_file(file["_links"]["self"]["href"], os.path.join(dataset_directory, file["path"]), token)
     except requests.exceptions.RequestException as e:
+        logging.error(f"An error occurred: {e}")
         print(f"An error occurred: {e}")
         if response is not None:
             print(f"Status code: {response.status_code}")
             print(f"Response content: {response.text}")
+            logging.error(f"Status code: {response.status_code}")
+            logging.error(f"Response content: {response.text}")
 
 def get_dryad_dataset_file(file_url: str, local_file_path: str, token: str):
     """
@@ -212,21 +244,30 @@ def get_dryad_dataset_file(file_url: str, local_file_path: str, token: str):
         print(f"Downloaded: {os.path.basename(local_file_path)}")
     except requests.exceptions.RequestException as e:
         print(f"Error downloading file: {e}")
+        logging.error(f"Error downloading file: {e}")
 
 def main(args: list[str] = None):
+    global PARENT_DIRECTORY
+    global CLIENT_ID
+    global CLIENT_SECRET
     load_dotenv(dotenv_path='./.env')
-    CLIENT_ID = os.getenv("CLIENT_ID")
-    CLIENT_SECRET = os.getenv("CLIENT_SECRET")
-    token = get_dryad_token(CLIENT_ID, CLIENT_SECRET)
+    initiate_logging()
+    logging.info(str(datetime.now()) + "\r=========================================================================")
+    CLIENT_ID = os.getenv("CLIENT_ID", "")
+    CLIENT_SECRET = os.getenv("CLIENT_SECRET", "")
+    PARENT_DIRECTORY = os.getenv("PARENT_DIRECTORY", "")
+    token = get_dryad_token()
     if not token:
-        print("Error: Failed to obtain authentication token")
+        logging.error("Failed to obtain authentication token")
         return 
     dois = args if args else sys.argv[1:]  
     if not dois:
         print("You need to include at least one DOI of Dryad")
+        logging.error("No DOI provided")
         return   
     for doi in dois:
         print(f"\nDownloading dataset for DOI: {doi}")
+        logging.info(f"Downloading dataset for DOI: {doi}")
         get_dryad_dataset(doi, token)
 
 if __name__ == "__main__":
