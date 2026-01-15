@@ -1,6 +1,8 @@
 import os
 import sys
 import json
+import shutil
+import zipfile
 import logging
 import requests
 import urllib.parse
@@ -56,6 +58,28 @@ def get_dryad_token() -> str:
         logging.error(f"Request failed with status code: {response.status_code}")
         logging.error(f"Response text: {response.text}")
         return None
+
+def zip_folder(source_path: str, destination_path: str, remove_source: bool = True, zip_name: str = "dataset.zip"):
+    """
+    Zips the contents of a folder into a specified zip file.
+
+    Args:
+        source_path: The path to the source folder to be zipped
+        destination_path: The path to the folder store the zip die
+        remove_source: Remove source files after zipping (Optional)
+        zip_name: The name of the output zip file (Optional)
+    """
+    zip_file_path = os.path.join(destination_path, zip_name)
+    with zipfile.ZipFile(zip_file_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+        for root, dirs, files in os.walk(source_path):
+            for file in files:
+                file_path = os.path.join(root, file)
+                arcname = os.path.relpath(file_path, source_path)
+                zipf.write(file_path, arcname)
+        logging.info(f"Zip up the folder and create {zip_name}")
+    if(remove_source):
+        shutil.rmtree(source_path)
+        logging.info(f"Zip up the folder and create {zip_name}")
 
 def cache_token(token: str, expired_hours: int = 10):
     """
@@ -118,7 +142,7 @@ def encode_dryad_doi_url(doi_identifier: str, postfix: str = "") -> str:
     FULL_URL = BASE_URL + encoded_identifier + postfix
     return FULL_URL
 
-def create_new_dir(doi_identifier: str) -> str | None:
+def create_new_dir(doi_identifier: str, postfix: str = None) -> str | None:
     """
     Creates a new directory to store the Dryad .zip dataset
 
@@ -133,6 +157,8 @@ def create_new_dir(doi_identifier: str) -> str | None:
         logging.error("PARENT_DIRECTORY not found")
         return None
     directory_path = f"{PARENT_DIRECTORY}{doi_identifier}"
+    if (postfix):
+        directory_path += f"_{postfix}"
     try:
         os.makedirs(directory_path, exist_ok=True)
         print(f"Directory created successfully at: {directory_path}")
@@ -195,13 +221,15 @@ def get_dryad_dataset(doi_identifier: str, token: str):
         if response.status_code == 200:
             data = response.json()
             file_list = data["_embedded"]["stash:files"]
-            dataset_directory = create_new_dir(doi_identifier)
+            dataset_directory = create_new_dir(doi_identifier, "data")
             if not dataset_directory:
                 print(f"Directory does not exist")
                 logging.error(f"Directory does not exist")
                 return
             for file in file_list:
                 get_dryad_dataset_file(file["_links"]["self"]["href"], os.path.join(dataset_directory, file["path"]), token)
+            final_directory = create_new_dir(doi_identifier)
+            zip_folder(dataset_directory, final_directory) 
     except requests.exceptions.RequestException as e:
         logging.error(f"An error occurred: {e}")
         print(f"An error occurred: {e}")

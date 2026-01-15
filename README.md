@@ -21,3 +21,5 @@ PARENT_DIRECTORY={YOUR_LOCAL_DIRECTORY_TO_STORE_DOWLOAD_FILE_INCLUDING_SLASH}
 5. To get a or multiple dataset(s) with specific `doi:10561/dryad.XXXXXX`, run the script:
 
 `python3 Dryad.py XXXXX1 XXXXXX2 `
+
+6. The script will fetch the data and create a `dataset.zip` file at the local directory
